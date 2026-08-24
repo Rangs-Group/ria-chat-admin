@@ -1,8 +1,8 @@
 /**
  * Server functions for user management.
  *
- * Calls the LibreChat Admin API (/api/admin/users) for list, search, and delete.
- * Create user is not yet wired.
+ * Calls the LibreChat Admin API (/api/admin/users) for list, search, create,
+ * update, and delete.
  */
 
 import { z } from 'zod';
@@ -34,14 +34,50 @@ export const usersQueryOptions = queryOptions({
 
 export const createUserFn = createServerFn({ method: 'POST' })
   .inputValidator(
+    z
+      .object({
+        name: z.string().min(1),
+        email: z.string().email(),
+        role: z.nativeEnum(SystemRoles),
+        password: z.string().min(8),
+        confirm_password: z.string().min(8),
+      })
+      .refine((data) => data.password === data.confirm_password, {
+        message: 'Passwords must match',
+        path: ['confirm_password'],
+      }),
+  )
+  .handler(async ({ data }): Promise<{ user: TUser }> => {
+    const response = await apiFetch('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      await extractApiError(response, 'Failed to create user');
+    }
+    const json = (await response.json()) as { user: TUser };
+    return json;
+  });
+
+export const updateUserFn = createServerFn({ method: 'POST' })
+  .inputValidator(
     z.object({
-      name: z.string().min(1),
-      email: z.string().email(),
-      role: z.nativeEnum(SystemRoles),
+      id: z.string(),
+      name: z.string().min(1).optional(),
+      role: z.nativeEnum(SystemRoles).optional(),
     }),
   )
-  .handler(async (): Promise<{ user: TUser }> => {
-    throw new Error('Not implemented: createUserFn');
+  .handler(async ({ data }): Promise<{ user: TUser }> => {
+    const { id, ...updates } = data;
+    const response = await apiFetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    if (!response.ok) {
+      await extractApiError(response, 'Failed to update user');
+    }
+    const json = (await response.json()) as { user: TUser };
+    return json;
   });
 
 export const deleteUserFn = createServerFn({ method: 'POST' })

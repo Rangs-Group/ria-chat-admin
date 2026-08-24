@@ -16,8 +16,9 @@ import {
   removeRoleMemberFn,
   roleAssignmentsQueryOptions,
   allRolesQueryOptions,
+  updateUserFn,
 } from '@/server';
-import { Avatar, TrashButton } from '@/components/shared';
+import { Avatar, EditButton, TrashButton } from '@/components/shared';
 import { cn, notifySuccess, notifyError } from '@/utils';
 import { ConfirmDialog } from '@/components/access';
 import { useLocalize } from '@/hooks';
@@ -39,6 +40,8 @@ const CONFIRM_TITLE_KEYS: Record<t.RemoveTarget['kind'], string> = {
 export function UserDetailDialog({
   user,
   onClose,
+  onUserUpdated,
+  canManage = false,
   canManageRoles = false,
   canManageGroups = false,
   canAssignConfigs = false,
@@ -46,8 +49,11 @@ export function UserDetailDialog({
   const localize = useLocalize();
   const queryClient = useQueryClient();
 
-  const [view, setView] = useState<'main' | 'add'>('main');
+  const [view, setView] = useState<'main' | 'add' | 'edit'>('main');
   const [removeTarget, setRemoveTarget] = useState<t.RemoveTarget | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState<SystemRoles>(SystemRoles.USER);
+  const [editError, setEditError] = useState('');
 
   const { data: roleAssignmentMap = {} } = useQuery(roleAssignmentsQueryOptions);
   const { data: groupAssignmentMap = {} } = useQuery(groupAssignmentsQueryOptions);
@@ -171,6 +177,20 @@ export function UserDetailDialog({
     onError: handleError,
   });
 
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!userId) throw new Error('No user selected');
+      return updateUserFn({ data: { id: userId, name: editName.trim(), role: editRole } });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      onUserUpdated?.(data.user);
+      notifySuccess(localize('com_toast_user_updated', { name: data.user.name }));
+      setView('main');
+    },
+    onError: (err: Error) => setEditError(err.message),
+  });
+
   const busy =
     removeRoleMutation.isPending ||
     removeGroupMutation.isPending ||
@@ -180,6 +200,22 @@ export function UserDetailDialog({
     setView('main');
     setRemoveTarget(null);
     onClose();
+  };
+
+  const openEdit = () => {
+    setEditName(userName);
+    setEditRole((user?.role as SystemRoles) ?? SystemRoles.USER);
+    setEditError('');
+    setView('edit');
+  };
+
+  const submitEdit = () => {
+    setEditError('');
+    if (!editName.trim()) {
+      setEditError(localize('com_users_name_required'));
+      return;
+    }
+    updateMutation.mutate();
   };
 
   const handleConfirmRemove = () => {
@@ -197,8 +233,12 @@ export function UserDetailDialog({
 
   const confirmDesc = getConfirmDesc(removeTarget, userName, localize);
 
-  const dialogTitle =
-    view === 'add' ? localize('com_users_add_profiles_title') : localize('com_users_detail_title');
+  const DIALOG_TITLE_KEYS: Record<typeof view, string> = {
+    main: 'com_users_detail_title',
+    add: 'com_users_add_profiles_title',
+    edit: 'com_users_edit_title',
+  };
+  const dialogTitle = localize(DIALOG_TITLE_KEYS[view]);
 
   return (
     <>
@@ -216,7 +256,15 @@ export function UserDetailDialog({
         >
           {user && view === 'main' && (
             <div className="flex flex-col gap-5" aria-label={localize('com_users_detail_title')}>
-              <UserHeader user={user} />
+              <div className="flex items-start justify-between gap-3">
+                <UserHeader user={user} />
+                {canManage && (
+                  <EditButton
+                    onClick={openEdit}
+                    ariaLabel={localize('com_a11y_edit_user', { name: userName })}
+                  />
+                )}
+              </div>
 
               <ProfileList
                 roles={userRoles}
@@ -278,6 +326,63 @@ export function UserDetailDialog({
               }}
               onDone={() => setView('main')}
             />
+          )}
+
+          {user && view === 'edit' && (
+            <div className="flex flex-col gap-5" aria-label={localize('com_users_edit_title')}>
+              {editError && (
+                <p className="text-sm text-(--cui-color-text-danger)" role="alert">
+                  {editError}
+                </p>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="edit-user-name"
+                  className="text-sm font-medium text-(--cui-color-text-default)"
+                >
+                  {localize('com_access_col_name')}
+                </label>
+                <input
+                  id="edit-user-name"
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  autoFocus
+                  className="rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) px-3 py-2 text-sm text-(--cui-color-text-default)"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="edit-user-role"
+                  className="text-sm font-medium text-(--cui-color-text-default)"
+                >
+                  {localize('com_users_role_label')}
+                </label>
+                <select
+                  id="edit-user-role"
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as SystemRoles)}
+                  className="rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) px-3 py-2 text-sm text-(--cui-color-text-default)"
+                >
+                  <option value={SystemRoles.USER}>{SystemRoles.USER}</option>
+                  <option value={SystemRoles.ADMIN}>{SystemRoles.ADMIN}</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="secondary"
+                  label={localize('com_ui_cancel')}
+                  onClick={() => setView('main')}
+                  disabled={updateMutation.isPending}
+                />
+                <Button
+                  type="primary"
+                  label={localize('com_ui_save')}
+                  onClick={submitEdit}
+                  disabled={updateMutation.isPending}
+                />
+              </div>
+            </div>
           )}
         </Dialog.Content>
       </Dialog>

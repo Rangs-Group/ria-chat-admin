@@ -37,6 +37,8 @@ export type RemoveTarget =
 export interface UserDetailDialogProps {
   user: TUser | null;
   onClose: () => void;
+  onUserUpdated?: (user: TUser) => void;
+  canManage?: boolean;
   canManageRoles?: boolean;
   canManageGroups?: boolean;
   canAssignConfigs?: boolean;

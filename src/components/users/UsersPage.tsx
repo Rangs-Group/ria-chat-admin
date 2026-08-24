@@ -211,6 +211,8 @@ export function UsersPage() {
       <UserDetailDialog
         user={detailUser}
         onClose={() => setDetailUser(null)}
+        onUserUpdated={setDetailUser}
+        canManage={canManage}
         canManageRoles={canManageRoles}
         canManageGroups={canManageGroups}
         canAssignConfigs={canAssignConfigs}

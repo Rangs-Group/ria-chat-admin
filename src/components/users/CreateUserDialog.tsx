@@ -12,17 +12,21 @@ export function CreateUserDialog({ open, onClose }: t.CreateUserDialogProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<SystemRoles>(SystemRoles.USER);
   const [error, setError] = useState('');
 
   const mutation = useMutation({
     mutationFn: async ({ name: submittedName }: { name: string }) => {
-      await createUserFn({ data: { name: submittedName, email, role } });
+      await createUserFn({
+        data: { name: submittedName, email, role, password, confirm_password: confirmPassword },
+      });
       return { name: submittedName };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      notifySuccess(localize('com_toast_user_invited', { name: data.name }));
+      notifySuccess(localize('com_toast_user_created', { name: data.name }));
       resetAndClose();
     },
     onError: (err: Error) => notifyError(err.message),
@@ -31,6 +35,8 @@ export function CreateUserDialog({ open, onClose }: t.CreateUserDialogProps) {
   const resetAndClose = () => {
     setName('');
     setEmail('');
+    setPassword('');
+    setConfirmPassword('');
     setRole(SystemRoles.USER);
     setError('');
     onClose();
@@ -46,6 +52,14 @@ export function CreateUserDialog({ open, onClose }: t.CreateUserDialogProps) {
       setError(localize('com_users_email_required'));
       return;
     }
+    if (!password) {
+      setError(localize('com_users_password_required'));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(localize('com_users_password_mismatch'));
+      return;
+    }
     mutation.mutate({ name });
   };
 
@@ -54,7 +68,7 @@ export function CreateUserDialog({ open, onClose }: t.CreateUserDialogProps) {
       open={open}
       title={localize('com_users_add')}
       submitLabel={localize('com_users_add')}
-      submitDisabled={!name.trim() || !email.trim()}
+      submitDisabled={!name.trim() || !email.trim() || !password || !confirmPassword}
       saving={mutation.isPending}
       error={error}
       onSubmit={doSubmit}
@@ -84,6 +98,35 @@ export function CreateUserDialog({ open, onClose }: t.CreateUserDialogProps) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder={localize('com_users_email_placeholder')}
+          className="rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) px-3 py-2 text-sm text-(--cui-color-text-default) placeholder:text-(--cui-color-text-disabled)"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="user-password" className="text-sm font-medium text-(--cui-color-text-default)">
+          {localize('com_auth_password_label')}
+        </label>
+        <input
+          id="user-password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={localize('com_auth_password_placeholder')}
+          className="rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) px-3 py-2 text-sm text-(--cui-color-text-default) placeholder:text-(--cui-color-text-disabled)"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="user-confirm-password"
+          className="text-sm font-medium text-(--cui-color-text-default)"
+        >
+          {localize('com_users_confirm_password_label')}
+        </label>
+        <input
+          id="user-confirm-password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder={localize('com_users_confirm_password_placeholder')}
           className="rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) px-3 py-2 text-sm text-(--cui-color-text-default) placeholder:text-(--cui-color-text-disabled)"
         />
       </div>
