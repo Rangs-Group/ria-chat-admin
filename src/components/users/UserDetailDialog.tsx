@@ -53,6 +53,8 @@ export function UserDetailDialog({
   const [removeTarget, setRemoveTarget] = useState<t.RemoveTarget | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<SystemRoles>(SystemRoles.USER);
+  const [editPassword, setEditPassword] = useState('');
+  const [editConfirmPassword, setEditConfirmPassword] = useState('');
   const [editError, setEditError] = useState('');
 
   const { data: roleAssignmentMap = {} } = useQuery(roleAssignmentsQueryOptions);
@@ -180,12 +182,23 @@ export function UserDetailDialog({
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!userId) throw new Error('No user selected');
-      return updateUserFn({ data: { id: userId, name: editName.trim(), role: editRole } });
+      return updateUserFn({
+        data: {
+          id: userId,
+          name: editName.trim(),
+          role: editRole,
+          ...(editPassword
+            ? { password: editPassword, confirm_password: editConfirmPassword }
+            : {}),
+        },
+      });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       onUserUpdated?.(data.user);
       notifySuccess(localize('com_toast_user_updated', { name: data.user.name }));
+      setEditPassword('');
+      setEditConfirmPassword('');
       setView('main');
     },
     onError: (err: Error) => setEditError(err.message),
@@ -205,6 +218,8 @@ export function UserDetailDialog({
   const openEdit = () => {
     setEditName(userName);
     setEditRole((user?.role as SystemRoles) ?? SystemRoles.USER);
+    setEditPassword('');
+    setEditConfirmPassword('');
     setEditError('');
     setView('edit');
   };
@@ -214,6 +229,16 @@ export function UserDetailDialog({
     if (!editName.trim()) {
       setEditError(localize('com_users_name_required'));
       return;
+    }
+    if (editPassword) {
+      if (editPassword.length < 8) {
+        setEditError(localize('com_users_password_too_short'));
+        return;
+      }
+      if (editPassword !== editConfirmPassword) {
+        setEditError(localize('com_users_password_mismatch'));
+        return;
+      }
     }
     updateMutation.mutate();
   };
@@ -368,6 +393,42 @@ export function UserDetailDialog({
                   <option value={SystemRoles.ADMIN}>{SystemRoles.ADMIN}</option>
                 </select>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="edit-user-password"
+                  className="text-sm font-medium text-(--cui-color-text-default)"
+                >
+                  {localize('com_users_new_password_label')}
+                </label>
+                <input
+                  id="edit-user-password"
+                  type="password"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder={localize('com_users_new_password_placeholder')}
+                  autoComplete="new-password"
+                  className="rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) px-3 py-2 text-sm text-(--cui-color-text-default) placeholder:text-(--cui-color-text-disabled)"
+                />
+              </div>
+              {editPassword && (
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="edit-user-confirm-password"
+                    className="text-sm font-medium text-(--cui-color-text-default)"
+                  >
+                    {localize('com_users_confirm_password_label')}
+                  </label>
+                  <input
+                    id="edit-user-confirm-password"
+                    type="password"
+                    value={editConfirmPassword}
+                    onChange={(e) => setEditConfirmPassword(e.target.value)}
+                    placeholder={localize('com_users_confirm_password_placeholder')}
+                    autoComplete="new-password"
+                    className="rounded-lg border border-(--cui-color-stroke-default) bg-(--cui-color-background-default) px-3 py-2 text-sm text-(--cui-color-text-default) placeholder:text-(--cui-color-text-disabled)"
+                  />
+                </div>
+              )}
               <div className="flex justify-end gap-2">
                 <Button
                   type="secondary"

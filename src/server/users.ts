@@ -61,11 +61,18 @@ export const createUserFn = createServerFn({ method: 'POST' })
 
 export const updateUserFn = createServerFn({ method: 'POST' })
   .inputValidator(
-    z.object({
-      id: z.string(),
-      name: z.string().min(1).optional(),
-      role: z.nativeEnum(SystemRoles).optional(),
-    }),
+    z
+      .object({
+        id: z.string(),
+        name: z.string().min(1).optional(),
+        role: z.nativeEnum(SystemRoles).optional(),
+        password: z.string().min(8).optional(),
+        confirm_password: z.string().optional(),
+      })
+      .refine((data) => !data.password || data.password === data.confirm_password, {
+        message: 'Passwords must match',
+        path: ['confirm_password'],
+      }),
   )
   .handler(async ({ data }): Promise<{ user: TUser }> => {
     const { id, ...updates } = data;
